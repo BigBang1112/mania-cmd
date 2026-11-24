@@ -18,7 +18,6 @@ Command line arguments of ManiaPlanet, found by reading the code of `ManiaPlanet
 - [Logging](#logging)
 - [NextCmdLine.txt](#nextcmdlinetxt)
 - [Examples](#examples)
-- [Open questions](#open-questions)
 - [Where this comes from](#where-this-comes-from)
 
 How to read the descriptions:
@@ -37,7 +36,7 @@ How to read the descriptions:
 | [Join a server](#joining-and-hosting) | `/join`, `/spectate`, `/joinasreferee`, `/joinpassword`, `/serverpassword`, `/lan`, `/silent`, `/team` |
 | [Host a server](#joining-and-hosting) | `/server`, `/serverplugin`, `/allowoutdatedlightmaps`, `/consolededicatedserver` |
 | [Start in a title](#titles) | `/title`, `/testtitle`, `/startuptitle` |
-| [Create a title pack](#titles) | `/createpack` |
+| [Rebuild a title pack](#createpacktitleid) | `/createpack` |
 | [Read a Gbx as JSON](#parsegbxfile) | `/parsegbx` |
 | [Validate replays](#validatepathpath) | `/validatepath`, `/checksolorecords` |
 | [Generate the script API documentation](#generatescriptdocfile) | `/generatescriptdoc`, `/editplugins` |
@@ -87,7 +86,7 @@ A switch is off if its value is `0`, `false`, `no`, `n`, `f` or starts with `dis
 In this document, an argument shown without a value is a switch, unless it's described otherwise.
 
 > [!WARNING]
-> The game writes its whole command line to its log, so values given to `/password` and `/uplaypassword` end up there in plain text.
+> The game writes its whole command line to its log, so values given to `/password`, `/uplaypassword` and `/validation` end up there in plain text.
 
 ## Opening files and links
 
@@ -109,8 +108,8 @@ Opens a `maniaplanet://` link, or a command starting with `#`. It also **forces 
 |---|---|
 | `#join=<server>` | Join as a player |
 | `#spectate=<server>` | Join as a spectator |
-| `#qjoin=<server>` | Join as a player, with the silent flag |
-| `#qspectate=<server>` | Join as a spectator, with the silent flag |
+| `#qjoin=<server>` | Join as a player, skipping the server confirmation screen |
+| `#qspectate=<server>` | Join as a spectator, skipping the server confirmation screen |
 | `#joinasreferee=<server>` | Join as a referee |
 | `#addbuddy=<login>` | Add a buddy |
 | `#invitebuddy=<login>` | Invite a buddy |
@@ -135,10 +134,10 @@ A `maniaplanet://` link without a command is opened as `http://<rest>`, or as `<
 | `/profile=<name>` | Profile to use |
 | `/login=<login>` | Account login. Defaults to `/nadeoservices_unsecure_id`. It goes through the login character filter. |
 | `/password=<password>` | Account password |
-| `/validation=<value>` | Stored as the account validation value *(not traced)* |
+| `/validation=<code>` | Online account validation code. A nonempty code saved in the selected profile takes priority. |
 | `/nickname=<name>` | Nickname, ignored if empty |
-| `/uplayemail=<email>` | Uplay email |
-| `/uplaypassword=<password>` | Uplay password |
+| `/uplayemail=<email>` | Uplay email, stored at startup (no reader found) |
+| `/uplaypassword=<password>` | Uplay password, stored at startup (no reader found) |
 
 ## Joining and hosting
 
@@ -168,15 +167,17 @@ These go with it:
 | `/joinpassword=<password>` | Server password. Takes priority over the one in `<server>`. |
 | `/serverpassword=<password>` | Used if `/joinpassword` is empty or missing |
 | `/lan` | LAN mode. Also affects the network settings, see [Network](#network). |
-| `/silent` | The same flag as in `#qjoin`, which also skips the intro. Only read when windowless or when there's a server to join. Always on with `/inputless`. |
+| `/silent` | Skips the startup intro and the server confirmation screen when joining. Only read when windowless or when there's a server to join. Always on with `/inputless`. |
 | `/team=<team>` | `0` or `blue`, `1` or `red`. The color names are case-insensitive. |
+
+With `/silent`, `#qjoin` or `#qspectate`, the game can still show connection progress, password prompts and errors.
 
 ### Hosting
 
 | Argument | Description |
 |---|---|
 | `/server` | Starts the flow of hosting a server. The three join arguments and both password arguments are then not read. |
-| `/serverplugin=<value>` | Stored as the server plugin |
+| `/serverplugin=<script>` | Loads a ManiaScript file in the `CServerPlugin` context. Give a path relative to `Scripts\`, such as `/serverplugin=MyPlugin.Script.txt`. |
 | `/allowoutdatedlightmaps` | Lets the server accept maps it would reject with `Map lightmap is not up to date` |
 | `/consolededicatedserver` | See below |
 
@@ -204,25 +205,29 @@ Starts in single title mode with the title from `WorkTitles\<name>` in the user 
 
 The title to select in the menu after startup. If it isn't installed, the store is opened with automatic installation. The value survives a relaunch through [NextCmdLine.txt](#nextcmdlinetxt).
 
-### `/createpack=<title>`
+### `/createpack=<titleId>`
 
-Opens the title pack creation menu for this title, then quits.
+Rebuilds an existing title pack and quits when the build flow finishes. Pass the full title ID, such as `/createpack=MyTitle@MyLogin`. The game looks up the title in the signed-in account's pack list on the master server.
+
+The build reads `WorkTitles\<titleId>\ManiaPlanetTitle.xml` and writes `Packs\<titleId>.Title.Pack.Gbx` in the user directory.
+
+In windowed mode the game can wait for a dialog response, including a cloud upload choice. With [`/windowless`](#windowless), the game skips the cloud upload prompt.
 
 ## Tools and automated modes
 
 ### `/parsegbx=<file>`
 
-Prints information about a `.Gbx` or `.Pack.Gbx` file as JSON to the standard output, then exits before the game initializes.
+Reads one `.Gbx` file or one `.Pack.Gbx` title pack, and prints a JSON summary to standard output, then exits before normal game startup. The input is opened read-only. Give an absolute path or a path relative to the process's working directory. Quote the whole argument if the path contains spaces.
 
-The exit code is `0` on success and `1` on failure. Don't combine it with `/windowless`, which opens a new console and waits for a key press on failure.
+The exit code is `0` on success. A file that can't be opened or parsed returns `1` without a JSON result. In a batch file, use `> map.json` to save the output. Run it without `/windowless` for unattended use, since that option opens a new console and waits for a key press on failure.
 
-Every result has `ClassId` and `ClassName`. The rest depends on the class:
+Every result has `ClassId`, an eight-digit hexadecimal string, and `ClassName`. Maps, replays, ghosts and packs include the fields below. Other Gbx classes that load successfully return just the class information.
 
 | Class | Fields |
 |---|---|
 | Map | `Name`, `AuthorLogin`, `TitleId`, `Comment`, `MapUid`, `PlayerModel`, `Environment`, `Decoration`, `Mod`, `MapType`, `MapStyle`, `PasswordProtected`, `IsValidated`, `BronzeTime`, `SilverTime`, `GoldTime`, `AuthorTime`, `LightmapVersion`, `DisplayCost`, `NbLaps`, `CheckpointsPerLaps` |
-| Replay | `Ghosts`, an array of ghost information |
-| Ghost | Ghost information |
+| Replay | `Ghosts`, an array of objects with the ghost fields listed below |
+| Ghost | `Login`, `MapUid`, `Time`, `NbRespawns`, `NbCheckpoints`, `ExeVersion`, `TitleId`, `TitlePackChecksum` |
 | Pack | `ContentsChecksum`, `IsImpostor`, `AuthorLogin`, `UsageSubDir`, `TitleId`, `Comment`, `InfoManialinkUrl`, `DownloadUrl`, `IncludedPacks`, `TitleDescXml`, `PublishedFiles` |
 
 ### `/validatepath=<path>`
@@ -237,7 +242,9 @@ Validates a replay, a ghost or a folder of them instead of going to the menus, t
 
 ### `/checksolorecords`
 
-With `/validatepath`, skips applying the race settings that are stored for validation (`UpdateFromSettingsForValidation`) before simulating. Unlike in TrackMania Forever, it's a switch.
+When a ghost has saved race settings, the validator normally applies its saved lap count and recalculates the expected checkpoint total. Of the stored fields, only `laps` changes the race in this build.
+
+With `/validatepath`, this switch keeps the lap count and checkpoint counts from the current race setup when simulating the run.
 
 ### `/generatescriptdoc=<file>`
 
@@ -250,24 +257,32 @@ Shoots the video of a replay without going through the menus, then exits. Forces
 - The name is either a full one or relative to `Replays`.
 - Several replays can be given, separated by `;`. Quote the argument in shells where `;` has a meaning.
 
-A login can be put in front of the name, with literal brackets:
+Put a single `[Login=...]` prefix before the first replay path. It tells the generated camera which player's ghost to follow in every replay in the list.
 
 ```
-/shootvideo=[Login=somelogin]MyReplay.Replay.Gbx
+"/shootvideo=[Login=somelogin]First.Replay.Gbx;Second.Replay.Gbx"
 ```
 
-The value is converted to ASCII.
+Use separate invocations to select different logins. A missing or unmatched login uses the default camera setup. If a replay already has a saved MediaTracker clip, the game uses that clip as saved.
+
+The entire value, including the login and replay paths, is converted to ASCII.
 
 ### `/bench`, `/bench=<file>`
 
-Benchmark mode, which exits when it's done. It only has to be present, so `/bench=0` enables it too, with `0` as the file name.
+Runs benchmark mode and exits when it finishes.
 
-- With a file, that replay is benchmarked. The name is either a full one or relative to `Replays`.
-- Without a file or list, it forces a window, measures the graphics performance and saves it.
+- With `/bench=<file>`, the game benchmarks that replay. Give a full path or one relative to `Replays`. For example, `/bench=0` looks for a replay file named `0`.
+- With `/bench` or `/bench=` and no `/list_benchs` filename, the game forces windowed mode and runs the graphics benchmark. It saves the result to `GfxDevicePerfs.txt`.
 
 ### `/list_benchs=<file>`
 
 Benchmarks the replays in a text file with one name per line. Lines starting with `//` are skipped. A file given to `/bench` takes priority over the list.
+
+```text
+// Campaign replays
+A01.Replay.Gbx
+A02.Replay.Gbx
+```
 
 > [!CAUTION]
 > **The list file is overwritten.** It's written back with the results added as `//` comments, even if it was read-only. Use a copy.
@@ -314,7 +329,17 @@ Runs without input. Also makes joining a server silent.
 
 ### `/kiosk`, `/kiosk=<number>`
 
-Kiosk mode `0` to `2`. `/kiosk` alone is mode `1`, and values above `2` fail an assert and become `1`. Any mode but `0` keeps the game locked in the foreground and starts it offline, like [`/offline`](#offline).
+Kiosk mode is a restricted setup for shared computers, such as public demo stations where visitors can try the game.
+
+| Argument | Behavior |
+|---|---|
+| `/kiosk=0` | Disables kiosk mode. |
+| `/kiosk` or `/kiosk=1` | Enables kiosk mode and ignores Windows close requests such as Alt+F4. |
+| `/kiosk=2` | Enables kiosk mode and handles Windows close requests normally. |
+
+Both enabled modes start offline and try to keep the game window in the foreground. They disable chat, profile saving, replay recording, screenshots, external browser links and the F11 display-mode shortcut.
+
+Values above `2` trigger an assertion and fall back to `1`. `/windowless` turns kiosk mode off.
 
 ### `/singleinst`
 
@@ -330,7 +355,9 @@ If a game window already exists, focuses it, sends it `/url` (or `/file` if ther
 
 ### `/uplay`, `/uplay=<number>`
 
-Activates Uplay PC and sets its application ID, which is `0` when no number is given. `/uplay=0` counts as off.
+Starts the Uplay PC integration at launch. `/uplay=<number>` passes that application ID to `UPLAY_Start`. Bare `/uplay` reads `UPlayAppId` from the game's INI and defaults to `2070`. `/uplay=0` leaves the integration off.
+
+After Uplay starts, the game can use the current Uplay account and friends list, handle overlay events and session invitations, and verify title ownership. A Uplay startup error can stop the game before it reaches the menus.
 
 ## Paths and files
 
@@ -339,7 +366,7 @@ The game's root is the directory of the executable, without a trailing `x64` dir
 | Argument | Description |
 |---|---|
 | `/usecurrentdir` | Uses the current directory instead of the executable's |
-| `/config=<file>` | System config file |
+| `/config=<file>` | Selects the `.SystemConfig.Gbx` file for launcher settings such as graphics and audio. The path is relative to `Config` in the user directory. `/config=Low` selects `Low.SystemConfig.Gbx`. The default is `Default.SystemConfig.Gbx`. |
 | `/ini=<file>` | Replaces `Nadeo.ini`. Appended to the root, so it has to be a **relative path**. If it can't be used, startup fails. |
 | `/userdir=<path>` | User directory, see below |
 | `/noscancache` | Doesn't use the file scan cache |
@@ -361,9 +388,11 @@ Values of `/userdir`:
 | `/d3d_max_level=<level>` | `10_0` or `10_1`, limits the Direct3D feature level |
 | `/d3d_debug_layer` | Presence. Asks whether to use the Direct3D 11 debug layer. |
 | `/d3d_debug_layer=error` | The same, with the message logger at level 1 instead of 2 |
-| `/enablehmd` | Turns on HMD stereoscopy *(inferred)* and allows HRTF audio |
+| `/enablehmd` | Requests stereo output to a VR headset at startup and allows HRTF audio outside safe mode. |
 | `/noxinput` | Disables XInput |
 | `/noopenvrinput` | Disables OpenVR input |
+
+Headset initialization is a stub that reports `No HMD found.` With this build, `/enablehmd` leaves headset output disabled.
 
 ## Network
 
@@ -384,31 +413,47 @@ The `ForceOffline` setting has the same effect.
 | `/nadeoservices_hostname=<host>` | Overrides the Nadeo services host |
 | `/nadeoservices_port=<number>` | Overrides the Nadeo services port, unless `0` |
 | `/nadeoservices_unsecure_id=<id>` | Unsecure user ID, also used as the login if there's no `/login` |
-| `/specdelay=<number>` | Prediction delay when spectating. Read once per game session. |
-| `/lan` | Besides LAN joining, uses LAN network settings, where the default prediction delay is 50 |
+| `/specdelay=<milliseconds>` | Spectator interpolation delay in milliseconds. The built-in default is `500` ms online and `50` ms with LAN settings. The game reads the argument when it first calculates spectator timing. |
+| `/lan` | Besides LAN joining, uses LAN network settings, where the default prediction delay is `50` ms |
+
+The master server can supply a different online default. A configured minimum spectator delay can raise the effective delay even when `/specdelay` is given.
 
 ## Development
 
 ### `/editplugins`
 
-- Enables the `ButtonEditPlugins` toolbar button.
-- Gives script "super powers" to pages from `localhost` and `127.0.0.1`.
-- Turns on a script mode in the playground that is otherwise used on `channel_` servers *(not traced)*.
+Shows the `ButtonEditPlugins` button in the system toolbar. Clicking it reloads the system plugins, clears the ManiaLink and script editor caches, and resets script compilation errors.
+
+In the stations menu, press Scroll Lock or Pause to open the in-game editor for loaded system plugin scripts. Hold Shift with either key to clear the station pages and reload the plugins.
+
+- Manialinks hosted on `localhost` or `127.0.0.1` can use the `ManiaPlanet` script API.
+- During play, the game's manialink UI scripts can use the `ManiaPlanet` API object. The game also grants this access on servers whose login starts with `channel_`.
 - Includes `nadeointernal` classes in `/generatescriptdoc`.
 
 ### `/additionalpluginurl=<url>`
 
-Loads an additional system plugin.
+Loads a ManiaScript system plugin (`.Script.txt`) into the client's UI. Give a direct HTTP or HTTPS URL to the script. For local scripts, use `file://Media/...` or a path relative to the game's data folders, such as `Media/ManiaApps/Tools.Script.txt`.
 
-- There are 11 names: `/additionalpluginurl`, then `/additionalpluginurl0` to `/additionalpluginurl9`.
-- A plugin replaces the built-in one with the same file name.
-- There can be 15 plugins in total.
-- Plugin editing is limited to the first additional plugin *(inferred)*.
-- They aren't loaded when windowless or in the automated modes.
+For example, put both scripts in `Media\ManiaApps` under the user directory and launch the game with both options.
+
+```bat
+ManiaPlanet.exe /additionalpluginurl=file://Media/ManiaApps/Tools.Script.txt /additionalpluginurl0=file://Media/ManiaApps/Status.Script.txt
+```
+
+- Use one argument per script. The game checks `/additionalpluginurl` first, then `/additionalpluginurl0` through `/additionalpluginurl9`. You can skip numbers.
+- A plugin with the same filename replaces an earlier plugin, including a built-in one. The limit is 15 plugins total, including built-ins.
+- The system plugin script editor targets the first additional plugin in that order, once it has loaded.
+- System plugins load in a graphical session with menus. Windowless mode and automated modes such as replay validation and shadow computation skip them.
 
 ### `/forcestationurl=<url>`
 
-Replaces the station URL of titles, except for one type of title that keeps its own *(which type wasn't identified)*. Read only once.
+Overrides the page URL for stations with a loaded title. The game reads the argument once, when it first updates a station card. Each station's URL mode comes from the master server's `mlp` field.
+
+| URL mode | How the station picks its page |
+|---|---|
+| `0` (default) | Uses the title pack's station URL if it has one. Otherwise, uses `/forcestationurl` if set, then the station's own URL. |
+| `1` | Uses `/forcestationurl` if set. Otherwise, uses the station's own URL, falling back to the title pack's URL if empty. |
+| `2` | Loads no station page. |
 
 ### `/skinchooser`
 
@@ -416,7 +461,9 @@ Opens the skin editor menu (`MenuSkinEditor`) once after startup.
 
 ### `/autoregendata`
 
-Enables data regeneration (`NSysFidReGen`).
+Enables live asset reloading at startup. While the game runs, it checks the modification times of local files backing loaded textures and scene mood settings and reloads them when they change.
+
+The log reports `[Game] AutoReGenData Enabled`. Mesh regeneration requires a separate engine setting.
 
 ## Logging
 
@@ -441,95 +488,63 @@ After the early initialization, the game appends the arguments from `Config\Next
 
 The game itself only writes `/startuptitle` to it, when it exits to run the launcher.
 
-## Examples
-
-These follow from the code and weren't run.
-
-Open a map:
-
-```bat
-ManiaPlanet.exe "C:\Maps\My Map.Map.Gbx"
-```
-
-Save information about a map as JSON, from a batch file:
-
-```bat
-ManiaPlanet.exe "/parsegbx=C:\Maps\My Map.Map.Gbx" > map.json
-```
-
-Generate the script documentation, including internal classes:
-
-```bat
-ManiaPlanet.exe /generatescriptdoc=C:\Temp\doc.h /editplugins
-```
-
-Validate a folder of replays:
-
-```bat
-ManiaPlanet.exe /windowless /validatepath=ToCheck
-```
-
-Join a password protected server as a spectator:
-
-```bat
-ManiaPlanet.exe /login=YOUR_LOGIN /password=YOUR_PASSWORD "/spectate=SERVER_LOGIN:SERVER_PASSWORD@TMStadium@nadeo"
-```
-
-Join a LAN server on a specific port:
-
-```bat
-ManiaPlanet.exe /join=192.168.1.10::2350
-```
-
-Recompute the shadows of all user maps of a title:
-
-```bat
-ManiaPlanet.exe /computeallshadows /useronly /fullcheck /LmQuality=High /titles=TMStadium@nadeo
-```
-
-## Open questions
-
-These need a run of the game or more tracing:
-
-- What the master server connection does with `/validation`.
-- Whether the silent flag does more than skip the intro.
-- What the script mode of `/editplugins` in the playground allows.
-- How plugin editing behaves with `/additionalpluginurl`.
-- Whether `/enablehmd` is enough to get HMD output.
-- Which type of title ignores `/forcestationurl`.
-
 ## Where this comes from
 
 | Address | Function | What it reads or does |
 |---|---|---|
 | `14087ce70` | `WinMainInternal` | Conversion of arguments, `/singleinst`, console, kiosk |
+| `14087ec70` | `WndProc` | Kiosk restrictions on closing the window and switching display modes |
 | `1406ac850` | `CSystemCommandLine::FindArg` | Case-insensitive lookup |
 | `1408776e0` | `CGbxApp::ApplyCommandLineArgs` | Application arguments |
 | `140161b70` | `CGbxGame::ApplyCommandLineArgs` | Game arguments |
+| `1406c92a0` | `CSystemUplayPC::Create` | Resolves the Uplay application ID and starts the SDK |
+| `1406c9a50` | `CSystemUplayPC::Update` | Processes Uplay events |
 | `140879ad0` | `CGbxApp::Init1` | `/parsegbx` |
 | `140878020` | `Dedicated_ParseGbx` | JSON output |
 | `140162dd0` | `CGbxGame::PreInitApp` | Overwrites the window title |
 | `140162130` | `CGbxGame::InitApp` | `/generatescriptdoc` |
 | `140162c70` | `CGbxGame::IsForceWindowed` | Forced window |
 | `1406b7170` | `CSystemEngine::ComputePaths` | `/ini`, `/userdir` |
+| `1406bbcf0` | `CSystemEngine::LoadSystemConfigAndBindToFid` | Resolves and loads `/config` |
 | `14087ba10` | `CGbxApp::Log_SetOutputFile` | `/logfilename` |
 | `14087c900` | `ReadNextCmdLine` | `NextCmdLine.txt` |
+| `140904240` | `CGameCtnApp::ApplySystemConfig` | Requests headset stereoscopy for `/enablehmd` |
+| `14076b1a0` | `CVisionHmd::Create` | Reports `No HMD found.` |
 | `14096f740` | `CGameCtnApp::UpdateGame_Init` | Account, joining |
+| `14092aba0` | `CGameCtnApp::SkipIntroBecauseAutomaticActionRequested` | Skips the startup intro for a silent join |
+| `140b354c0` | `CGameCtnNetwork::MainLoop_Menus_DialogJoin` | Skips server confirmation in silent mode |
+| `14096292a` | In `CGameCtnApp::UpdateGame` | Saved profile code takes priority over `/validation` |
 | `140962f5e` | In `CGameCtnApp::UpdateGame` (not disassembled by Ghidra) | `/offline` |
+| `1416166c0` | `CNetMasterServerUserInfo::SetValidationCode` | Normalizes the validation code |
+| `14165b810` | `CNetMasterServerTask_Connect::PrepareRequest` | Sends the encrypted code |
+| `140b5b380` | `CGameCtnNetwork::ValidateSoloAccount` | Prompts for validation and updates the saved code |
 | `140168600` | `CFastAssert::StaticInit` | Raw search for `/computeallshadows` |
 | `140bbfec0` | `CGameCtnApp::CmdBench` | Benchmarks |
 | `140bc11f0` | `CGameCtnApp::CmdBenchReplayList` | Benchmark list, written back |
+| `1412d2690` | `CTrackManiaRace::UpdateFromSettingsParam` | Applies the saved lap count |
 | `1412d2a80` | `CTrackManiaRace::Validate` | `/checksolorecords` |
 | `1408e4120` | `CGameApp::CmdLineParseJoinServerString` | Join string |
 | `1408e4420` | `CGameApp::CmdLineUrlMptp_Check` | Link commands |
 | `140a99e50` | `CGameManiaPlanet::Start` | Titles |
 | `140a878c0` | `CGameManiaPlanet::InitAfterProfiles` | Pack creation, shadows, video, skin chooser |
+| `140e7c2a0` | `CGameEditorPacks::MenuCreatePack` | Looks up the title ID and starts the rebuild |
 | `140a7f610` | `CGameManiaPlanet::ComputeAllChallengeShadowsByTitle` | Shadow options |
 | `1412b98a0` | `CTrackMania::UpdateGame_StartUp` | `/validatepath` |
 | `1412b6540` | `CTrackMania::ReplayValidatePath` | Validation and its log |
 | `140ac3930` | `CGameNetwork::InitNet` | Proxy, Nadeo services |
+| `1412aeca0` | `CGameCtnNetwork::PlaygroundSync_GetPredictionParams` | Spectator delay and `/specdelay` |
 | `140ab03f0` | `CGameSystemOverlay::Plugins_Update` | Additional plugins |
-
-The list of arguments comes from a byte by byte scan of the executable for calls to the `CSystemCommandLine` getters and for references to narrow and wide argument-like strings, which includes code that Ghidra didn't disassemble. An argument name built at runtime wouldn't be found.
+| `140aad400` | `DownloadPluginFiber` | Resolves the plugin source as a URL or file |
+| `140ab01d0` | `CGameSystemOverlay::Plugins_ReloadForEdition` | Reloads system plugins from the toolbar |
+| `140e88160` | `CGameManiaPlanetMenuStations::OnInputEvent` | Keyboard shortcuts for editing and reloading plugins |
+| `140b724e0` | `CGameMasterServer::ReadStationsInfosParams` | Reads the station URL mode from `mlp` |
+| `140e8d290` | `CGameManiaPlanetMenuStations::UpdateStations_UpdateStationObject` | Applies the URL mode and `/forcestationurl` |
+| `1408e8cf0` | `CGameApp::Start` | Enables live asset reloading for `/autoregendata` |
+| `1406bd710` | `NSysPlatform::MainLoop` | Runs the asset refresh and logs when it is enabled |
+| `1408de930` | `AutoReGenData_CheckImages` | Reloads changed texture files |
+| `1408defb0` | `AutoReGenData_CheckScenes` | Reimports changed scene mood settings |
+| `140d07f70` | `CGameMgrMap::AutoReGenData_CheckMeshs` | Checks the separate mesh regeneration setting |
+| `140d1a560` | `CGameManiaPlanetScriptAPI::UseSuperPowersForUrl` | Script API access for locally hosted ManiaLinks |
+| `140ce0bf0` | `CGamePlaygroundInterface::UpdateAsync` | Gives playground ManiaLink scripts access to the `ManiaPlanet` API |
 
 The code also has a check for `/parsegbx` or `/validatepath` at the end of `CGbxApp::ApplyCommandLineArgs`. It requires a console state that is only set after that function returns, so it isn't taken during a normal startup, and neither argument depends on `/windowless`.
