@@ -422,7 +422,7 @@ The master server can supply a different online default. A configured minimum sp
 
 ### `/editplugins`
 
-Shows the `ButtonEditPlugins` button in the system toolbar. Clicking it reloads the system plugins, clears the ManiaLink and script editor caches, and resets script compilation errors.
+Shows the `ButtonEditPlugins` button in the system toolbar. Clicking it reloads the system plugins, clears the manialink and script editor caches, and resets script compilation errors.
 
 In the stations menu, press Scroll Lock or Pause to open the in-game editor for loaded system plugin scripts. Hold Shift with either key to clear the station pages and reload the plugins.
 
@@ -544,7 +544,7 @@ The game itself only writes `/startuptitle` to it, when it exits to run the laun
 | `1408de930` | `AutoReGenData_CheckImages` | Reloads changed texture files |
 | `1408defb0` | `AutoReGenData_CheckScenes` | Reimports changed scene mood settings |
 | `140d07f70` | `CGameMgrMap::AutoReGenData_CheckMeshs` | Checks the separate mesh regeneration setting |
-| `140d1a560` | `CGameManiaPlanetScriptAPI::UseSuperPowersForUrl` | Script API access for locally hosted ManiaLinks |
-| `140ce0bf0` | `CGamePlaygroundInterface::UpdateAsync` | Gives playground ManiaLink scripts access to the `ManiaPlanet` API |
+| `140d1a560` | `CGameManiaPlanetScriptAPI::UseSuperPowersForUrl` | Script API access for locally hosted manialinks |
+| `140ce0bf0` | `CGamePlaygroundInterface::UpdateAsync` | Gives playground manialink scripts access to the `ManiaPlanet` API |
 
 The code also has a check for `/parsegbx` or `/validatepath` at the end of `CGbxApp::ApplyCommandLineArgs`. It requires a console state that is only set after that function returns, so it isn't taken during a normal startup, and neither argument depends on `/windowless`.
