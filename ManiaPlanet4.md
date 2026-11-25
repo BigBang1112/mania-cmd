@@ -1,6 +1,6 @@
 # ManiaPlanet command line arguments
 
-Command line arguments of ManiaPlanet, found by reading the code of `ManiaPlanetLogs.exe` (x64) in Ghidra. None of them were tested by running the game, and the other executables of the game weren't checked.
+Command line arguments of ManiaPlanet, found by reading the code of `ManiaPlanetLogs.exe` (x64) in Ghidra.
 
 - [Quick reference](#quick-reference)
 - [Syntax](#syntax)
@@ -23,9 +23,7 @@ Command line arguments of ManiaPlanet, found by reading the code of `ManiaPlanet
 How to read the descriptions:
 
 - No mark: read directly from the code.
-- *(inferred)*: based on names or surrounding code.
 - *(no reader found)*: the value is stored, and a search of the likely code found nothing that reads it. This doesn't prove that it's unused.
-- *(not traced)*: the argument is read, but what happens afterwards wasn't followed.
 
 ## Quick reference
 
