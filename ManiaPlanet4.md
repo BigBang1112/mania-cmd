@@ -20,11 +20,6 @@ Command line arguments of ManiaPlanet, found by reading the code of `ManiaPlanet
 - [Examples](#examples)
 - [Where this comes from](#where-this-comes-from)
 
-How to read the descriptions:
-
-- No mark: read directly from the code.
-- *(no reader found)*: the value is stored, and a search of the likely code found nothing that reads it. This doesn't prove that it's unused.
-
 ## Quick reference
 
 | Task | Arguments |
